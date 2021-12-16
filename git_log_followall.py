@@ -7,22 +7,16 @@ import itertools
 from pathlib import Path
 
 # TODO: Add support for tracking copies?
-#    (Will require a change in data structures)
 
 def git_log_follow_all(git_options, pathspecs):
-    all_commits = []
-    all_past_pathspecs = []
-
-    for pathspec in git_pathspecs_trees(pathspecs):
-        commits, pathspecs = git_pathspec_commits_past_paths(pathspec)
-        all_commits.extend(commits)
-        all_past_pathspecs.extend(pathspecs)
+    all_commits, all_past_pathspecs = map(flatten, zip(
+        *(git_pathspec_history(pathspec)
+          for pathspec in git_pathspecs_trees(pathspecs))))
 
     return git_selective_log(git_options, all_commits, all_past_pathspecs)
 
 def git_pathspecs_trees(pathspecs):
-    return itertools.chain(*(git_ls_files(pathspec)
-                             for pathspec in pathspecs))
+    return flatten(git_ls_files(pathspec) for pathspec in pathspecs)
 
 def git_ls_files(pathspec):
     output = run_get_stdout(['git', 'ls-files',
@@ -31,7 +25,7 @@ def git_ls_files(pathspec):
     paths = list(filter(len, output.split(b'\0')))
     return paths or [pathspec]
 
-def git_pathspec_commits_past_paths(pathspec):
+def git_pathspec_history(pathspec):
     commits = []
     pathspec_past_paths = [pathspec]
 
@@ -86,13 +80,16 @@ def git_selective_log(git_options, commits, pathspecs):
     result = subprocess.run(['git', 'log',
                              '--stdin', '--ignore-missing']
                             + git_options
-                            + ['--'] + pathspecs,
+                            + ['--'] + list(pathspecs),
                             input=b'\n'.join(commits))
     return result.returncode
 
 def run_get_stdout(*args, **kwargs):
     result = subprocess.run(*args, check=True, capture_output=True, **kwargs)
     return result.stdout
+
+def flatten(iter):
+    return itertools.chain(*iter)
 
 def main():
     git_options, pathspecs = parse_cmdline(sys.argv[1:])
