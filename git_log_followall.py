@@ -2,7 +2,6 @@ import subprocess
 import sys
 import os
 import argparse
-import re
 import itertools
 from pathlib import Path
 
@@ -31,7 +30,6 @@ def git_pathspec_history(pathspec):
                              '--follow', '--name-status',
                              '--pretty=format:%x00%x00%H', '-z',
                              '--', pathspec])
-    rename_status_re = re.compile(br'^R\d+$')
     records = filter(len, output.split(b'\0\0'))
     for record in records:
         commit, statusblob = record.split(b'\n', 1)
