@@ -6,8 +6,6 @@ import re
 import itertools
 from pathlib import Path
 
-# TODO: Add support for tracking copies?
-
 def git_log_follow_all(git_options, pathspecs):
     all_commits, all_past_pathspecs = map(flatten, zip(
         *(git_pathspec_history(pathspec)
@@ -45,7 +43,8 @@ def git_pathspec_history(pathspec):
             except ValueError:
                 pass
             else:
-                if status.startswith(b'R') and to == pathspec_past_paths[-1]:
+                if (status_is_name_change(status)
+                    and to == pathspec_past_paths[-1]):
                     pathspec_past_paths.append(from_)
     return commits, pathspec_past_paths
 
@@ -64,12 +63,15 @@ def parse_statusblob(statusblob):
     fields = list(filter(len, statusblob.split(b'\0')))
     i = 0
     while i < len(fields):
-        if fields[i].startswith(b'R') or fields[i].startswith(b'C'):
+        if status_is_name_change(fields[i]):
             chunk = 3
         else:
             chunk = 2
         yield fields[i:i+chunk]
         i += chunk
+
+def status_is_name_change(status):
+    return status.startswith(b'R') or status.startswith(b'C')
 
 def git_selective_log(git_options, commits, pathspecs):
     """Show git log for all commits, but only for pathspecs"""
