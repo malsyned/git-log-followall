@@ -14,9 +14,9 @@ def git_log_follow_all(git_options, pathspecs):
     all_past_pathspecs = []
 
     for pathspec in git_pathspecs_trees(pathspecs):
-        commits = git_pathspec_commits(pathspec)
+        commits, pathspecs = git_pathspec_commits_past_paths(pathspec)
         all_commits.extend(commits)
-        all_past_pathspecs.extend(git_pathspec_past_paths(pathspec, commits))
+        all_past_pathspecs.extend(pathspecs)
 
     return git_selective_log(git_options, all_commits, all_past_pathspecs)
 
@@ -31,30 +31,29 @@ def git_ls_files(pathspec):
     paths = list(filter(len, output.split(b'\0')))
     return paths or [pathspec]
 
-def git_pathspec_commits(pathspec):
-    output = run_get_stdout(['git', 'log',
-                             '--follow', '--pretty=format:%H\n',
-                             '--', pathspec])
-    commits = list(filter(len, output.split(b'\n')))
-    return commits
-
-def git_pathspec_past_paths(pathspec, commits):
-    """Examine commits and extract all current and former names for pathspec"""
+def git_pathspec_commits_past_paths(pathspec):
+    commits = []
     pathspec_past_paths = [pathspec]
+
     output = run_get_stdout(['git', 'log',
-                             '--stdin', '--no-walk', '--name-status',
-                             '--pretty=format:', '-z'],
-                            input=b'\n'.join(commits))
-    # This isn't a perfect way to parse the --name-status output
-    # looking for renames. It can be fooled (but probably won't be) by
-    # a pathspec that matches status_re
-    status_re = re.compile(br'^R\d+$')
-    fields = output.split(b'\0')
-    maybe_renames = zip(fields, fields[1:], fields[2:])
-    for status, from_, to in maybe_renames:
-        if status_re.match(status) and to == pathspec_past_paths[-1]:
-            pathspec_past_paths.append(from_)
-    return pathspec_past_paths
+                             '--follow', '--name-status',
+                             '--pretty=format:%x00%x00%H', '-z',
+                             '--', pathspec])
+    rename_status_re = re.compile(br'^R\d+$')
+    records = filter(len, output.split(b'\0\0'))
+    for record in records:
+        commit, statusblob = record.split(b'\n', 1)
+        commits.append(commit)
+
+        # This isn't a perfect way to parse the --name-status output
+        # looking for renames. It can be fooled (but probably won't
+        # be) by a pathspec that matches rename_status_re.
+        fields = statusblob.split(b'\0')
+        maybe_renames = zip(fields, fields[1:], fields[2:])
+        for status, from_, to in maybe_renames:
+            if rename_status_re.match(status) and to == pathspec_past_paths[-1]:
+                pathspec_past_paths.append(from_)
+    return commits, pathspec_past_paths
 
 def git_selective_log(git_options, commits, pathspecs):
     """Show git log for all commits, but only for pathspecs"""
