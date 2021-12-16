@@ -4,13 +4,21 @@ import os
 import argparse
 import itertools
 from pathlib import Path
+import asyncio
 
 def git_log_follow_all(git_options, pathspecs):
-    all_commits, all_past_pathspecs = map(flatten, zip(
-        *(git_pathspec_history(pathspec)
-          for pathspec in git_pathspecs_trees(pathspecs))))
+    histories = asyncio.run(git_get_histories(pathspecs))
+    if not histories:
+        return None
 
+    all_commits, all_past_pathspecs = map(flatten, zip(*histories))
     return git_selective_log(git_options, all_commits, all_past_pathspecs)
+
+async def git_get_histories(pathspecs):
+    history_threads = (asyncio.to_thread(git_pathspec_history, pathspec)
+                       for pathspec in git_pathspecs_trees(pathspecs))
+    result = await asyncio.gather(*history_threads)
+    return result
 
 def git_pathspecs_trees(pathspecs):
     return flatten(git_ls_files(pathspec) for pathspec in pathspecs)
@@ -73,10 +81,6 @@ def status_is_name_change(status):
 
 def git_selective_log(git_options, commits, pathspecs):
     """Show git log for all commits, but only for pathspecs"""
-    if not commits and sys.stderr.isatty():
-        print('nothing to do.', file=sys.stderr)
-        return 0
-
     try:
         result = subprocess.run(['git', 'log',
                                  '--stdin', '--ignore-missing']
@@ -105,6 +109,8 @@ def main():
     program = Path(sys.argv[0]).name
     try:
         result = git_log_follow_all(git_options, pathspecs)
+        if result is None and sys.stderr.isatty():
+            print('nothing to do.', file=sys.stderr)
         exit(result)
     except subprocess.CalledProcessError as ex:
         # A git plumbing call failed
