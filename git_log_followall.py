@@ -77,12 +77,21 @@ def git_selective_log(git_options, commits, pathspecs):
         print('nothing to do.', file=sys.stderr)
         return 0
 
-    result = subprocess.run(['git', 'log',
-                             '--stdin', '--ignore-missing']
-                            + git_options
-                            + ['--'] + list(pathspecs),
-                            input=b'\n'.join(commits))
+    try:
+        result = subprocess.run(['git', 'log',
+                                 '--stdin', '--ignore-missing']
+                                 + git_options
+                                 + ['--'] + list(pathspecs),
+                                input=b'\n'.join(commits))
+    except FileNotFoundError as ex:
+        if hasattr(ex, 'winerror') and ex.winerror == 206:
+            raise PathLengthError from ex
+        else:
+            raise
     return result.returncode
+
+class PathLengthError(FileNotFoundError):
+    pass
 
 def run_get_stdout(*args, **kwargs):
     result = subprocess.run(*args, check=True, capture_output=True, **kwargs)
@@ -93,17 +102,21 @@ def flatten(iter):
 
 def main():
     git_options, pathspecs = parse_cmdline(sys.argv[1:])
+    program = Path(sys.argv[0]).name
     try:
         result = git_log_follow_all(git_options, pathspecs)
         exit(result)
     except subprocess.CalledProcessError as ex:
         # A git plumbing call failed
-        program = Path(sys.argv[0]).name
         cmd = ' '.join(map(os.fsdecode, ex.cmd))
         print(f'{program}: {cmd}', file=sys.stderr)
         if ex.stderr:
             print(os.fsdecode(ex.stderr), file=sys.stderr)
         exit(ex.returncode)
+    except PathLengthError as ex:
+        print(f'{program}: git log command line too long. Try a smaller set of paths.',
+              file=sys.stderr)
+        exit(ex.__cause__.errno)
 
 def parse_cmdline(argv):
     # On the use of os.fsencode: It's important that the file names be
