@@ -26,7 +26,7 @@ def git_ls_files(pathspec):
     output = run_get_stdout(['git', 'ls-files',
                              '-z',
                              '--', pathspec])
-    paths = list(filter(len, output.split(b'\0')))
+    paths = list(filter(None, output.split(b'\0')))
     return paths or [pathspec]
 
 def git_pathspec_history(pathspec):
@@ -37,7 +37,7 @@ def git_pathspec_history(pathspec):
                              '--follow', '--name-status',
                              '--pretty=format:%x00%x00%H', '-z',
                              '--', pathspec])
-    records = filter(len, output.split(b'\0\0'))
+    records = filter(None, output.split(b'\0\0'))
     for record in records:
         commit, statusblob = record.split(b'\n', 1)
         commits.append(commit)
@@ -65,7 +65,7 @@ def parse_statusblob(statusblob):
     #         write_name_quoted(name_a, opt->file, line_termination);
     # }
 
-    fields = list(filter(len, statusblob.split(b'\0')))
+    fields = list(filter(None, statusblob.split(b'\0')))
     i = 0
     while i < len(fields):
         if status_is_name_change(fields[i]):
