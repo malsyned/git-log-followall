@@ -7,7 +7,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 def git_log_follow_all(git_options, pathspecs):
-    histories = map(flatten, zip(*git_get_histories(pathspecs)))
+    histories = git_get_histories(pathspecs)
     try:
         all_commits, all_past_pathspecs = histories
     except ValueError:
@@ -17,7 +17,8 @@ def git_log_follow_all(git_options, pathspecs):
 
 def git_get_histories(pathspecs):
     pool = ThreadPoolExecutor()
-    return pool.map(git_pathspec_history, git_pathspecs_trees(pathspecs))
+    results = pool.map(git_pathspec_history, git_pathspecs_trees(pathspecs))
+    return pairs_of_iters_to_pair_of_iters(results)
 
 def git_pathspecs_trees(pathspecs):
     return flatten(git_ls_files(pathspec) for pathspec in pathspecs)
@@ -101,6 +102,9 @@ class PathLengthError(FileNotFoundError):
 def run_get_stdout(*args, **kwargs):
     result = subprocess.run(*args, check=True, capture_output=True, **kwargs)
     return result.stdout
+
+def pairs_of_iters_to_pair_of_iters(i):
+    return map(flatten, zip(*i))
 
 def flatten(iter):
     return itertools.chain(*iter)
