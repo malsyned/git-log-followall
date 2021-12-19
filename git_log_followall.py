@@ -4,21 +4,20 @@ import os
 import argparse
 import itertools
 from pathlib import Path
-import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 def git_log_follow_all(git_options, pathspecs):
-    histories = asyncio.run(git_get_histories(pathspecs))
-    if not histories:
+    histories = map(flatten, zip(*git_get_histories(pathspecs)))
+    try:
+        all_commits, all_past_pathspecs = histories
+    except ValueError:
         return None
 
-    all_commits, all_past_pathspecs = map(flatten, zip(*histories))
     return git_selective_log(git_options, all_commits, all_past_pathspecs)
 
-async def git_get_histories(pathspecs):
-    history_threads = (asyncio.to_thread(git_pathspec_history, pathspec)
-                       for pathspec in git_pathspecs_trees(pathspecs))
-    result = await asyncio.gather(*history_threads)
-    return result
+def git_get_histories(pathspecs):
+    pool = ThreadPoolExecutor()
+    return pool.map(git_pathspec_history, git_pathspecs_trees(pathspecs))
 
 def git_pathspecs_trees(pathspecs):
     return flatten(git_ls_files(pathspec) for pathspec in pathspecs)
