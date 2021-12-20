@@ -81,6 +81,8 @@ def parse_statusblob(statusblob):
 def status_is_name_change(status):
     return status.startswith(b'R') or status.startswith(b'C')
 
+WINERROR_FNAME_TOO_LONG = 206
+
 def git_selective_log(git_options, commits, pathspecs):
     """Show git log for all commits, but only for pathspecs"""
     try:
@@ -90,7 +92,7 @@ def git_selective_log(git_options, commits, pathspecs):
                                  + ['--'] + list(pathspecs),
                                 input=b'\n'.join(commits))
     except FileNotFoundError as ex:
-        if hasattr(ex, 'winerror') and ex.winerror == 206:
+        if hasattr(ex, 'winerror') and ex.winerror == WINERROR_FNAME_TOO_LONG:
             raise PathLengthError from ex
         else:
             raise
