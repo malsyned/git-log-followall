@@ -108,8 +108,8 @@ def run_get_stdout(*args, **kwargs):
 def pairs_of_iters_to_pair_of_iters(i):
     return map(flatten, zip(*i))
 
-def flatten(iter):
-    return itertools.chain(*iter)
+def flatten(iter_):
+    return itertools.chain.from_iterable(iter_)
 
 def main():
     git_options, pathspecs = parse_cmdline(sys.argv[1:])
