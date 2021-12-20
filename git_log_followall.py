@@ -85,12 +85,11 @@ WINERROR_FNAME_TOO_LONG = 206
 
 def git_selective_log(git_options, commits, pathspecs):
     """Show git log for all commits, but only for pathspecs"""
+    cmd = itertools.chain(
+        ['git', 'log', '--stdin', '--ignore-missing'], git_options,
+        ['--'], list(pathspecs))
     try:
-        result = subprocess.run(['git', 'log',
-                                 '--stdin', '--ignore-missing']
-                                 + git_options
-                                 + ['--'] + list(pathspecs),
-                                input=b'\n'.join(commits))
+        result = subprocess.run(cmd, input=b'\n'.join(commits))
     except FileNotFoundError as ex:
         if hasattr(ex, 'winerror') and ex.winerror == WINERROR_FNAME_TOO_LONG:
             raise PathLengthError from ex
